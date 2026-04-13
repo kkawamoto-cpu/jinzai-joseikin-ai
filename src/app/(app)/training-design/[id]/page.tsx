@@ -12,5 +12,9 @@ export default async function TrainingDesignDetail({
     include: { company: true },
   });
   if (!design) return notFound();
-  return <DesignWorkspace initial={JSON.parse(JSON.stringify(design))} />;
+  // BigInt(資本金等)をシリアライズ可能に変換
+  const safe = JSON.parse(
+    JSON.stringify(design, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
+  );
+  return <DesignWorkspace initial={safe} />;
 }

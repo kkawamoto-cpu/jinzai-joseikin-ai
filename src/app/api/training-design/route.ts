@@ -13,7 +13,10 @@ export async function GET() {
     include: { company: true, project: true },
     orderBy: { updatedAt: "desc" },
   });
-  return NextResponse.json({ designs });
+  const safe = JSON.parse(
+    JSON.stringify(designs, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
+  );
+  return NextResponse.json({ designs: safe });
 }
 
 export async function POST(req: NextRequest) {

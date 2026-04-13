@@ -8,7 +8,10 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     include: { company: true, project: true },
   });
   if (!design) return NextResponse.json({ error: "Not Found" }, { status: 404 });
-  return NextResponse.json({ design });
+  const safe = JSON.parse(
+    JSON.stringify(design, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
+  );
+  return NextResponse.json({ design: safe });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
