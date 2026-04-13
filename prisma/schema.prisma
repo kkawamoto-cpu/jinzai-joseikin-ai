@@ -1,0 +1,467 @@
+// 人材開発支援助成金申請AI - Prisma Schema
+// PostgreSQL前提。ローカルで手早く動かす場合は provider を "sqlite" に変更し、
+// .env の DATABASE_URL を "file:./dev.db" にしてください。
+
+generator client {
+  provider      = "prisma-client-js"
+  // Vercel(AWS Lambda: RHEL / linux-musl) 向けバイナリを含める
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================
+// Enums
+// =========================
+enum Role {
+  ADMIN
+  CLIENT
+  TRAINING_PROVIDER
+  SHAROUSHI
+}
+
+enum SubsidyCourse {
+  JIGYO_TENKAI_RESKILLING
+  IKUSEI_SUPPORT
+  HITOHE_NO_TOUSHI
+}
+
+enum ProjectStatus {
+  DRAFT
+  INPUTTING
+  WAITING_DOCUMENTS
+  AI_CHECKED
+  NEEDS_FIX
+  WAITING_SHAROUSHI
+  READY_TO_HANDOFF
+  HANDED_OFF
+  REVIEWING
+  COMPLETED
+}
+
+enum StepCode {
+  STEP_1_DOCUMENT_GUIDE
+  STEP_2_COMPANY_INFO
+  STEP_3_OFFICES
+  STEP_4_TRAINEES
+  STEP_5_TRAINING_INFO
+  STEP_6_INTERNAL_PLAN
+  STEP_7_UPLOADS
+  STEP_8_AI_CHECK
+  STEP_9_DRAFTS
+  STEP_10_HANDOFF
+}
+
+enum StepStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  RETURNED
+}
+
+enum OfficeType {
+  MAIN
+  BRANCH
+}
+
+enum TrainingFormat {
+  ONSITE
+  LIVE_ONLINE
+  E_LEARNING
+  CORRESPONDENCE
+  SUBSCRIPTION
+}
+
+enum InstructionType {
+  BUSINESS_ORDER
+  VOLUNTARY
+}
+
+enum TrainingType {
+  OFF_JT
+  OFF_JT_OJT
+}
+
+enum DocumentType {
+  POWER_OF_ATTORNEY
+  CONSENT_FORM
+  EMPLOYMENT_CONTRACT
+  INTERNAL_CAPABILITY_PLAN
+  TELEWORK_RULES
+  EXECUTIVE_EMPLOYMENT_CERT
+  CHILDCARE_LEAVE_FORM
+  INVOICE
+  RECEIPT
+  PAYMENT_RECORD
+  COMPLETION_CERTIFICATE
+  ATTENDANCE_RECORD
+  PAYROLL_LEDGER
+  COURSE_GUIDE
+  CURRICULUM
+  CONTRACT
+}
+
+enum DocumentStatus {
+  NOT_SUBMITTED
+  SUBMITTED
+  RETURNED
+  APPROVED
+}
+
+enum UploadStatus {
+  UPLOADED
+  ANALYZED
+  ERROR
+}
+
+enum AICheckType {
+  COURSE_MATCH
+  MISSING_DOCUMENT
+  INVALID_INPUT
+  RISK_DETECTION
+  DEADLINE_ALERT
+  TARGET_TRAINING_WARNING
+}
+
+enum Severity {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum AIContentType {
+  INTERNAL_PLAN_DRAFT
+  BUSINESS_EXPANSION_DESCRIPTION
+  DX_GX_DESCRIPTION
+  FUTURE_ROLE_DESCRIPTION
+  REMINDER_MESSAGE
+  HANDOFF_MEMO
+}
+
+enum HandoffStatus {
+  PREPARING
+  REQUESTED
+  ACCEPTED
+  REVIEWING
+  RETURNED
+  CONFIRMED
+}
+
+enum CommentTargetType {
+  PROJECT
+  STEP
+  DOCUMENT
+  TRAINING
+  TRAINEE
+}
+
+// =========================
+// Tables
+// =========================
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           Role
+  companyId      String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company        Company? @relation(fields: [companyId], references: [id])
+  createdProjects Project[] @relation("ProjectCreatedBy")
+  assignedProjects Project[] @relation("ProjectSharoushi")
+  providerProjects Project[] @relation("ProjectProvider")
+  uploads        UploadedFile[]
+  comments       Comment[]
+  logs           ActivityLog[]
+  handoffsBy     HandoffRecord[] @relation("HandoffBy")
+  handoffsTo     HandoffRecord[] @relation("HandoffTo")
+}
+
+model Company {
+  id                                String   @id @default(cuid())
+  companyName                       String
+  representativeName                String?
+  representativeTitle               String?
+  headOfficeAddress                 String?
+  headOfficePhone                   String?
+  capitalAmount                     BigInt?
+  corporateNumber                   String?
+  employeeCount                     Int?
+  employmentInsuranceOfficeNumber   String?
+  industryCode                      String?
+  branchCount                       Int?
+  laborRepresentativeName           String?
+  trainingPromotionDepartment       String?
+  trainingPromotionTitle            String?
+  trainingPromotionName             String?
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+
+  users    User[]
+  projects Project[]
+}
+
+model Project {
+  id                              String        @id @default(cuid())
+  projectName                     String
+  companyId                       String
+  subsidyCourse                   SubsidyCourse @default(JIGYO_TENKAI_RESKILLING)
+  status                          ProjectStatus @default(DRAFT)
+  trainingStartDate               DateTime?
+  trainingEndDate                 DateTime?
+  planSubmissionDeadline          DateTime?
+  progressPercent                 Int           @default(0)
+  assignedSharoushiUserId         String?
+  assignedTrainingProviderUserId  String?
+  currentStep                     StepCode      @default(STEP_1_DOCUMENT_GUIDE)
+  isArchived                      Boolean       @default(false)
+  createdBy                       String
+  createdAt                       DateTime      @default(now())
+  updatedAt                       DateTime      @updatedAt
+
+  company                Company          @relation(fields: [companyId], references: [id])
+  creator                User             @relation("ProjectCreatedBy", fields: [createdBy], references: [id])
+  sharoushi              User?            @relation("ProjectSharoushi", fields: [assignedSharoushiUserId], references: [id])
+  trainingProvider       User?            @relation("ProjectProvider", fields: [assignedTrainingProviderUserId], references: [id])
+
+  steps                  ProjectStep[]
+  offices                Office[]
+  trainees               Trainee[]
+  trainings              Training[]
+  requiredDocuments      RequiredDocument[]
+  uploadedFiles          UploadedFile[]
+  internalPlan           InternalCapabilityPlan?
+  aiCheckResults         AICheckResult[]
+  aiGeneratedContents    AIGeneratedContent[]
+  handoffRecords         HandoffRecord[]
+  comments               Comment[]
+  activityLogs           ActivityLog[]
+}
+
+model ProjectStep {
+  id           String     @id @default(cuid())
+  projectId    String
+  stepCode     StepCode
+  stepStatus   StepStatus @default(NOT_STARTED)
+  completedAt  DateTime?
+  lastSavedAt  DateTime?
+  lastSavedBy  String?
+  comment      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, stepCode])
+}
+
+model Office {
+  id            String     @id @default(cuid())
+  projectId     String
+  officeType    OfficeType @default(MAIN)
+  officeName    String
+  officeNumber  String?
+  employeeCount Int        @default(0)
+  address       String?
+  sortOrder     Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trainees Trainee[]
+}
+
+model Trainee {
+  id                        String   @id @default(cuid())
+  projectId                 String
+  officeId                  String?
+  fullName                  String
+  gender                    String?
+  employmentInsuranceNumber String?
+  employmentType            String?
+  isExecutiveDualRole       Boolean  @default(false)
+  isOnChildcareLeave        Boolean  @default(false)
+  isRemoteTraining          Boolean  @default(false)
+  currentJobRole            String?
+  futureJobRole             String?
+  targetTrainingName        String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  office  Office? @relation(fields: [officeId], references: [id])
+}
+
+model Training {
+  id                          String           @id @default(cuid())
+  projectId                   String
+  trainingName                String
+  providerName                String?
+  trainingFormat              TrainingFormat   @default(ONSITE)
+  trainingStartDate           DateTime?
+  trainingEndDate             DateTime?
+  totalTrainingHours          Int              @default(0)
+  standardLearningHours       Int?
+  standardLearningPeriod      Int?
+  tuitionFee                  Int              @default(0)
+  admissionFee                Int?
+  materialFee                 Int?
+  location                    String?
+  instructorName              String?
+  curriculumText              String?
+  completionCondition         String?
+  instructionType             InstructionType  @default(BUSINESS_ORDER)
+  trainingType                TrainingType     @default(OFF_JT)
+  relationToBusinessExpansion String?
+  relationToDxGx              String?
+  relationToFutureRole        String?
+  isTargetCourseMatch         Boolean?
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model RequiredDocument {
+  id               String         @id @default(cuid())
+  projectId        String
+  documentType     DocumentType
+  documentName     String
+  isRequired       Boolean        @default(true)
+  conditionNote    String?
+  status           DocumentStatus @default(NOT_SUBMITTED)
+  feedbackComment  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  files   UploadedFile[]
+}
+
+model UploadedFile {
+  id                  String        @id @default(cuid())
+  projectId           String
+  requiredDocumentId  String?
+  fileName            String
+  filePath            String
+  mimeType            String
+  fileSize            Int
+  uploadedBy          String
+  documentType        DocumentType?
+  extractedText       String?
+  uploadStatus        UploadStatus  @default(UPLOADED)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requiredDoc     RequiredDocument? @relation(fields: [requiredDocumentId], references: [id])
+  uploader        User              @relation(fields: [uploadedBy], references: [id])
+}
+
+model InternalCapabilityPlan {
+  id                         String   @id @default(cuid())
+  projectId                  String   @unique
+  managementPhilosophy       String?
+  managementPolicy           String?
+  futureBusinessPolicy       String?
+  focusArea                  String?
+  idealHumanResource         String?
+  hrBasicPolicy              String?
+  roleBasedDevelopmentPolicy String?
+  trainingPurpose            String?
+  careerSupportPolicy        String?
+  selfDevelopmentSupportPolicy String?
+  placementPolicy            String?
+  promotionCriteria          String?
+  evaluationCriteria         String?
+  qualificationReflection    String?
+  executiveSkillRequirements String?
+  midlevelSkillRequirements  String?
+  juniorSkillRequirements    String?
+  generatedDocumentText      String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AICheckResult {
+  id                String      @id @default(cuid())
+  projectId         String
+  checkType         AICheckType
+  severity          Severity    @default(INFO)
+  title             String
+  detail            String
+  relatedStepCode   StepCode?
+  isResolved        Boolean     @default(false)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model AIGeneratedContent {
+  id          String        @id @default(cuid())
+  projectId   String
+  contentType AIContentType
+  title       String
+  contentText String
+  version     Int           @default(1)
+  generatedBy String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model HandoffRecord {
+  id            String        @id @default(cuid())
+  projectId     String
+  handedOffBy   String
+  handedOffTo   String?
+  handoffStatus HandoffStatus @default(PREPARING)
+  handoffNote   String?
+  handedOffAt   DateTime?
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  by      User    @relation("HandoffBy", fields: [handedOffBy], references: [id])
+  to      User?   @relation("HandoffTo", fields: [handedOffTo], references: [id])
+}
+
+model Comment {
+  id              String            @id @default(cuid())
+  projectId       String
+  stepCode        StepCode?
+  commenterUserId String
+  targetType      CommentTargetType @default(PROJECT)
+  targetId        String?
+  commentText     String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  commenter User    @relation(fields: [commenterUserId], references: [id])
+}
+
+model ActivityLog {
+  id           String   @id @default(cuid())
+  projectId    String?
+  userId       String?
+  actionType   String
+  actionDetail String
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id])
+}
