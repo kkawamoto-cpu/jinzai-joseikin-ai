@@ -35,7 +35,13 @@ export default async function ProjectLayout({
             </div>
             <h1 className="mt-0.5 text-lg font-bold">{project.projectName}</h1>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <Link
+              href={`/projects/${project.id}/ai-assistant`}
+              className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-brand-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              🪄 AI入力代行
+            </Link>
             <span className="pill-blue">
               {project.subsidyCourse === "JIGYO_TENKAI_RESKILLING"
                 ? "事業展開等リスキリング支援コース"

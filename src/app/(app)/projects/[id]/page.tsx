@@ -43,6 +43,24 @@ export default async function Dashboard({ params }: { params: { id: string } }) 
 
   return (
     <div className="space-y-6">
+      <Link
+        href={`/projects/${project.id}/ai-assistant`}
+        className="block rounded-xl bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 p-5 text-white shadow-md transition hover:shadow-lg"
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-2xl">
+            🪄
+          </div>
+          <div className="flex-1">
+            <div className="text-lg font-bold">AIに入力を任せる</div>
+            <div className="mt-0.5 text-sm text-white/90">
+              会社謄本・Excel・音声・対話から、Step1〜7の入力をAIが自動で記入します
+            </div>
+          </div>
+          <div className="text-2xl">→</div>
+        </div>
+      </Link>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {card("ステータス", STATUS_LABEL[project.status] ?? project.status)}
         {card("不足書類", missingDocs, missingDocs > 0 ? "amber" : "emerald")}

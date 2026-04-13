@@ -23,7 +23,8 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.company.deleteMany();
 
-  const pw = await bcrypt.hash("password", 10);
+  // ワンアカウントで運用：ADMIN権限で全機能利用可能
+  const pw = await bcrypt.hash("demo", 10);
 
   const company = await prisma.company.create({
     data: {
@@ -45,23 +46,14 @@ async function main() {
     },
   });
 
-  const admin = await prisma.user.create({
-    data: { name: "管理者", email: "admin@example.com", passwordHash: pw, role: "ADMIN" },
-  });
-  const client = await prisma.user.create({
+  const demo = await prisma.user.create({
     data: {
-      name: "顧客企業担当者",
-      email: "client@example.com",
+      name: "デモユーザー",
+      email: "demo@example.com",
       passwordHash: pw,
-      role: "CLIENT",
+      role: "ADMIN",
       companyId: company.id,
     },
-  });
-  const sharoushi = await prisma.user.create({
-    data: { name: "社労士ユーザー", email: "sharoushi@example.com", passwordHash: pw, role: "SHAROUSHI" },
-  });
-  const provider = await prisma.user.create({
-    data: { name: "研修事業者ユーザー", email: "provider@example.com", passwordHash: pw, role: "TRAINING_PROVIDER" },
   });
 
   // 案件1（入力途中）
@@ -76,13 +68,10 @@ async function main() {
       planSubmissionDeadline: new Date("2026-05-01"),
       progressPercent: 40,
       currentStep: "STEP_4_TRAINEES",
-      createdBy: client.id,
-      assignedSharoushiUserId: sharoushi.id,
-      assignedTrainingProviderUserId: provider.id,
+      createdBy: demo.id,
     },
   });
 
-  // Steps
   const stepCodes = [
     "STEP_1_DOCUMENT_GUIDE",
     "STEP_2_COMPANY_INFO",
@@ -103,12 +92,11 @@ async function main() {
         stepCode: code,
         stepStatus: idx < 3 ? "COMPLETED" : idx === 3 ? "IN_PROGRESS" : "NOT_STARTED",
         lastSavedAt: idx <= 3 ? new Date() : null,
-        lastSavedBy: idx <= 3 ? client.id : null,
+        lastSavedBy: idx <= 3 ? demo.id : null,
       },
     });
   }
 
-  // Offices
   const main = await prisma.office.create({
     data: {
       projectId: project1.id,
@@ -132,7 +120,6 @@ async function main() {
     },
   });
 
-  // Trainees
   await prisma.trainee.createMany({
     data: [
       {
@@ -161,7 +148,6 @@ async function main() {
     ],
   });
 
-  // Trainings
   await prisma.training.createMany({
     data: [
       {
@@ -184,30 +170,9 @@ async function main() {
         relationToFutureRole: "訓練後はデータ分析・DX推進職務に従事予定",
         isTargetCourseMatch: true,
       },
-      {
-        projectId: project1.id,
-        trainingName: "Pythonによる業務自動化講座",
-        providerName: "株式会社AIラーニング",
-        trainingFormat: "E_LEARNING",
-        trainingStartDate: new Date("2026-06-15"),
-        trainingEndDate: new Date("2026-08-31"),
-        totalTrainingHours: 30,
-        standardLearningHours: 30,
-        standardLearningPeriod: 60,
-        tuitionFee: 88_000,
-        instructionType: "BUSINESS_ORDER",
-        trainingType: "OFF_JT",
-        curriculumText: "Python基礎、Pandas、業務自動化スクリプト実装",
-        completionCondition: "全章完了＋修了テスト合格",
-        relationToBusinessExpansion: "業務プロセス改革に必要な自動化技術の習得",
-        relationToDxGx: "定型業務のDX化・効率化を推進",
-        relationToFutureRole: "DX推進担当への配置転換を前提とする",
-        isTargetCourseMatch: true,
-      },
     ],
   });
 
-  // Required Documents
   const doc = async (type: any, name: string, required = true) =>
     prisma.requiredDocument.create({
       data: { projectId: project1.id, documentType: type, documentName: name, isRequired: required },
@@ -218,9 +183,7 @@ async function main() {
   await doc("INTERNAL_CAPABILITY_PLAN", "事業内職業能力開発計画");
   await doc("CURRICULUM", "カリキュラム");
   await doc("COURSE_GUIDE", "受講案内");
-  await doc("TELEWORK_RULES", "テレワーク規程", false);
 
-  // Internal Plan
   await prisma.internalCapabilityPlan.create({
     data: {
       projectId: project1.id,
@@ -229,67 +192,11 @@ async function main() {
       futureBusinessPolicy: "AI/DX事業の立ち上げと拡大",
       focusArea: "生成AI活用、データ分析、業務自動化",
       idealHumanResource: "自律的に学び、変化に対応できる人材",
-      hrBasicPolicy: "全社員が新しい技術領域へチャレンジできる環境を整える",
     },
   });
-
-  // AI チェック結果サンプル
-  await prisma.aICheckResult.createMany({
-    data: [
-      {
-        projectId: project1.id,
-        checkType: "COURSE_MATCH",
-        severity: "INFO",
-        title: "事業展開等リスキリング支援コースに該当可能性あり",
-        detail: "訓練内容・時間・関連性の3観点でスコアを満たしています。",
-        relatedStepCode: "STEP_5_TRAINING_INFO",
-      },
-      {
-        projectId: project1.id,
-        checkType: "MISSING_DOCUMENT",
-        severity: "WARNING",
-        title: "テレワーク規程が未提出です",
-        detail: "自宅受講予定の受講者がいるためテレワーク規程が必要です。",
-        relatedStepCode: "STEP_7_UPLOADS",
-      },
-    ],
-  });
-
-  // AI生成コンテンツサンプル
-  await prisma.aIGeneratedContent.create({
-    data: {
-      projectId: project1.id,
-      contentType: "INTERNAL_PLAN_DRAFT",
-      title: "事業内職業能力開発計画ドラフト v1",
-      contentText: "（サンプル）事業内職業能力開発計画の初期ドラフトです。Step6で最新化できます。",
-      version: 1,
-    },
-  });
-
-  // 案件2（新規）
-  const project2 = await prisma.project.create({
-    data: {
-      projectName: "2026年度下期 DX基礎研修",
-      companyId: company.id,
-      subsidyCourse: "JIGYO_TENKAI_RESKILLING",
-      status: "DRAFT",
-      trainingStartDate: new Date("2026-10-01"),
-      trainingEndDate: new Date("2026-12-28"),
-      planSubmissionDeadline: new Date("2026-09-01"),
-      progressPercent: 5,
-      currentStep: "STEP_1_DOCUMENT_GUIDE",
-      createdBy: client.id,
-    },
-  });
-  for (const code of stepCodes) {
-    await prisma.projectStep.create({
-      data: { projectId: project2.id, stepCode: code, stepStatus: "NOT_STARTED" },
-    });
-  }
 
   console.log("✅ Seed complete.");
-  console.log("ログイン情報: admin@example.com / client@example.com / sharoushi@example.com / provider@example.com");
-  console.log("パスワード: password");
+  console.log("ログイン: demo@example.com / demo");
 }
 
 main()
