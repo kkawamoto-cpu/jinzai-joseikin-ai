@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import StepFooter from "@/components/StepFooter";
 import StepAIAssist from "@/components/StepAIAssist";
 import MemoryPanel from "@/components/MemoryPanel";
+import CustomerLoadPanel from "@/components/CustomerLoadPanel";
 
 function SaveBadge({ state }: { state: "idle" | "saving" | "saved" | "error" }) {
   if (state === "saving")
@@ -130,6 +131,7 @@ export default function Step2Form({
         label="企業基本情報をAIに任せる"
         description="会社名等からAIがWebを検索し、法人番号・本社住所・資本金など全項目を自動入力します"
       />
+      <CustomerLoadPanel onLoad={(data) => setForm((f) => ({ ...f, ...data }))} />
       <MemoryPanel
         scope="company"
         currentData={form}
