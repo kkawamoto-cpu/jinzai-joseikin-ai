@@ -1,5 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import NavigationProgress from "@/components/NavigationProgress";
 
 export const metadata: Metadata = {
   title: "AI助成くん - 人材開発支援助成金申請プラットフォーム",
@@ -9,7 +11,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
