@@ -2,9 +2,17 @@
 // ドキュメント: https://ai.google.dev/gemini-api/docs
 // 環境変数 GEMINI_API_KEY 必須。未設定時はモックレスポンスを返します。
 
-// 注意: gemini-2.0-flash は無料枠が0のため使えません。gemini-2.5-flash を使用。
-const MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+// 注意: gemini-2.0-flash は無料枠が0のため使えません。gemini-2.5-flash を主に使用。
+// 過負荷時に自動でフォールバックする候補リスト。
+const PRIMARY_MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+const FALLBACK_MODELS = [
+  PRIMARY_MODEL,
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
+  "gemini-flash-latest",
+];
+const endpointFor = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 export type ExtractedFormData = {
   company?: {
@@ -110,6 +118,8 @@ type Part =
   | { text: string }
   | { inline_data: { mime_type: string; data: string } };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function callGemini(parts: Part[], asJson: boolean): Promise<string> {
   // 余計なクォート・空白を除去
   const apiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
@@ -125,18 +135,40 @@ async function callGemini(parts: Part[], asJson: boolean): Promise<string> {
       ? { responseMimeType: "application/json", temperature: 0.3 }
       : { temperature: 0.7 },
   };
-  const res = await fetch(`${ENDPOINT}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 500)}`);
+
+  // 503/429 リトライ + モデルフォールバック
+  let lastErr: { status: number; text: string } | null = null;
+  for (const model of FALLBACK_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(`${endpointFor(model)}?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          return text;
+        }
+        const err = await res.text();
+        lastErr = { status: res.status, text: err };
+        // 503/429/500 はリトライ。404 はモデル切替。それ以外は即時エラー。
+        if (res.status === 404) break; // モデル無し → 次のモデルへ
+        if (![429, 500, 503].includes(res.status)) {
+          throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 300)}`);
+        }
+        // exponential backoff: 1s, 2s, 4s
+        await sleep(1000 * Math.pow(2, attempt));
+      } catch (e: any) {
+        if (attempt === 2) lastErr = { status: 0, text: String(e.message || e) };
+        await sleep(500);
+      }
+    }
   }
-  const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  return text;
+  throw new Error(
+    `Gemini APIが現在混雑しています。しばらく待ってから再度お試しください。(${lastErr?.status ?? 0})`
+  );
 }
 
 /** ファイル（PDF/画像等）からフォームデータを抽出 */
