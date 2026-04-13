@@ -1,17 +1,23 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Company = any;
 
 /**
- * 顧客管理に登録された企業から1社を選択して、フォームに反映できるパネル。
- *   <CustomerLoadPanel onLoad={(data) => setForm(data)} />
+ * 顧客管理に登録された企業から1社を選択するパネル。
+ *
+ * - projectId が指定された場合: その案件のリンク先企業を切り替える（推奨）
+ * - onLoad のみ指定: フォームに値を反映するだけ（旧動作）
  */
 export default function CustomerLoadPanel({
   onLoad,
+  projectId,
 }: {
   onLoad: (data: Company) => void;
+  projectId?: string;
 }) {
+  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -36,7 +42,29 @@ export default function CustomerLoadPanel({
       (c.headOfficeAddress ?? "").includes(query)
   );
 
-  const apply = (c: Company) => {
+  const apply = async (c: Company) => {
+    // projectId が指定されていれば、案件の対象企業を切り替える（より安全）
+    if (projectId) {
+      const ok = confirm(
+        `この案件の対象企業を「${c.companyName}」に切り替えますか？\n\n（既存の企業情報を上書きせず、案件のリンク先を変更します）`
+      );
+      if (!ok) return;
+      const res = await fetch(`/api/projects/${projectId}/link-company`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId: c.id }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setMsg(`⚠ 切替失敗: ${j.error || "不明なエラー"}`);
+        return;
+      }
+      setMsg(`✓ 「${c.companyName}」に案件を紐づけました`);
+      setOpen(false);
+      router.refresh();
+      return;
+    }
+    // フォームに値を反映するだけ（旧動作）
     onLoad({
       companyName: c.companyName ?? "",
       representativeName: c.representativeName ?? "",
@@ -69,7 +97,9 @@ export default function CustomerLoadPanel({
           <div>
             <div className="font-semibold text-slate-800">顧客管理から読み込み</div>
             <div className="text-xs text-slate-600">
-              既に登録済みの企業情報を選んで、入力なしで全項目を反映できます
+              {projectId
+                ? "既に登録済みの企業を選ぶと、この案件の対象企業を切り替えます（既存データは保持）"
+                : "登録済みの企業を選んで全項目を反映できます"}
             </div>
           </div>
         </div>

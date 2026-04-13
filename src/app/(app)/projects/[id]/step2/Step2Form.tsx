@@ -90,23 +90,44 @@ export default function Step2Form({
   const save = async () => {
     setSaveState("saving");
     setErrorMsg(null);
+    // 数値類だけ事前変換、それ以外はそのままサーバの緩い処理に委ねる
     const payload: any = { ...form };
-    payload.capitalAmount = form.capitalAmount ? Number(form.capitalAmount) : undefined;
-    payload.employeeCount = form.employeeCount !== "" ? Number(form.employeeCount) : undefined;
-    payload.branchCount = form.branchCount !== "" ? Number(form.branchCount) : undefined;
-    const res = await fetch(`/api/projects/${projectId}/company`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      setSaveState("error");
-      setErrorMsg(j.error || "保存に失敗しました");
-      return;
+    if (form.capitalAmount !== "" && form.capitalAmount != null) {
+      const n = Number(String(form.capitalAmount).replace(/[^\d.-]/g, ""));
+      payload.capitalAmount = Number.isFinite(n) ? n : null;
+    } else {
+      payload.capitalAmount = null;
     }
-    setSaveState("saved");
-    setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 2000);
+    if (form.employeeCount !== "" && form.employeeCount != null) {
+      const n = Number(form.employeeCount);
+      payload.employeeCount = Number.isFinite(n) ? n : null;
+    } else {
+      payload.employeeCount = null;
+    }
+    if (form.branchCount !== "" && form.branchCount != null) {
+      const n = Number(form.branchCount);
+      payload.branchCount = Number.isFinite(n) ? n : null;
+    } else {
+      payload.branchCount = null;
+    }
+    try {
+      const res = await fetch(`/api/projects/${projectId}/company`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setSaveState("error");
+        setErrorMsg(j.error || `保存失敗 (HTTP ${res.status})`);
+        return;
+      }
+      setSaveState("saved");
+      setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 2000);
+    } catch (e: any) {
+      setSaveState("error");
+      setErrorMsg(e?.message || "通信エラー");
+    }
   };
 
   // 自動保存（800ms debounce）
@@ -131,7 +152,10 @@ export default function Step2Form({
         label="企業基本情報をAIに任せる"
         description="会社名等からAIがWebを検索し、法人番号・本社住所・資本金など全項目を自動入力します"
       />
-      <CustomerLoadPanel onLoad={(data) => setForm((f) => ({ ...f, ...data }))} />
+      <CustomerLoadPanel
+        projectId={projectId}
+        onLoad={(data) => setForm((f) => ({ ...f, ...data }))}
+      />
       <MemoryPanel
         scope="company"
         currentData={form}
