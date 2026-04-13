@@ -4,6 +4,42 @@ import StepFooter from "@/components/StepFooter";
 import StepAIAssist from "@/components/StepAIAssist";
 import MemoryPanel from "@/components/MemoryPanel";
 
+// ※ この Field はコンポーネント外に定義することで、親の再レンダー時に
+// 新しい関数参照として再生成されず、input のフォーカスが保持される。
+function Field({
+  label,
+  value,
+  onChange,
+  help,
+  required,
+  placeholder,
+  colSpan,
+}: {
+  label: string;
+  value: string | number;
+  onChange: (v: string) => void;
+  help?: string;
+  required?: boolean;
+  placeholder?: string;
+  colSpan?: boolean;
+}) {
+  return (
+    <div className={colSpan ? "md:col-span-2" : ""}>
+      <label className="label">
+        {label}
+        {required && <span className="ml-1 text-rose-600">*</span>}
+      </label>
+      <input
+        className="input"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {help && <p className="help">{help}</p>}
+    </div>
+  );
+}
+
 export default function Step2Form({
   projectId,
   initial,
@@ -30,8 +66,8 @@ export default function Step2Form({
   });
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  const update = (k: keyof typeof form) => (e: any) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setField = (k: keyof typeof form) => (v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
     setMsg(null);
@@ -51,34 +87,6 @@ export default function Step2Form({
     }
     setMsg({ type: "ok", text: "保存しました" });
   };
-
-  const Field = ({
-    label,
-    k,
-    help,
-    required,
-    placeholder,
-  }: {
-    label: string;
-    k: keyof typeof form;
-    help?: string;
-    required?: boolean;
-    placeholder?: string;
-  }) => (
-    <div>
-      <label className="label">
-        {label}
-        {required && <span className="ml-1 text-rose-600">*</span>}
-      </label>
-      <input
-        className="input"
-        value={(form as any)[k]}
-        onChange={update(k)}
-        placeholder={placeholder}
-      />
-      {help && <p className="help">{help}</p>}
-    </div>
-  );
 
   return (
     <div>
@@ -103,27 +111,26 @@ export default function Step2Form({
 
       <div className="card space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="企業名" k="companyName" required />
-          <Field label="代表者職氏名" k="representativeName" placeholder="山田 太郎" />
-          <Field label="代表者役職" k="representativeTitle" placeholder="代表取締役" />
-          <Field label="本社電話番号" k="headOfficePhone" placeholder="03-1234-5678" />
-          <div className="md:col-span-2">
-            <Field label="本社所在地" k="headOfficeAddress" />
-          </div>
+          <Field label="企業名" value={form.companyName} onChange={setField("companyName")} required />
+          <Field label="代表者職氏名" value={form.representativeName} onChange={setField("representativeName")} placeholder="山田 太郎" />
+          <Field label="代表者役職" value={form.representativeTitle} onChange={setField("representativeTitle")} placeholder="代表取締役" />
+          <Field label="本社電話番号" value={form.headOfficePhone} onChange={setField("headOfficePhone")} placeholder="03-1234-5678" />
+          <Field label="本社所在地" value={form.headOfficeAddress} onChange={setField("headOfficeAddress")} colSpan />
           <Field
-            label="資本金額（円）"
-            k="capitalAmount"
+            label="資本金額(円)"
+            value={form.capitalAmount}
+            onChange={setField("capitalAmount")}
             help="中小企業該当性の一次判定に使用します"
           />
-          <Field label="法人番号（13桁）" k="corporateNumber" />
-          <Field label="常時雇用する労働者数" k="employeeCount" />
-          <Field label="雇用保険適用事業所番号（11桁）" k="employmentInsuranceOfficeNumber" />
-          <Field label="産業分類" k="industryCode" />
-          <Field label="本社以外の事業所数" k="branchCount" />
-          <Field label="労働者代表氏名" k="laborRepresentativeName" />
-          <Field label="職業能力開発推進者 部署" k="trainingPromotionDepartment" />
-          <Field label="職業能力開発推進者 役職" k="trainingPromotionTitle" />
-          <Field label="職業能力開発推進者 氏名" k="trainingPromotionName" />
+          <Field label="法人番号(13桁)" value={form.corporateNumber} onChange={setField("corporateNumber")} />
+          <Field label="常時雇用する労働者数" value={form.employeeCount} onChange={setField("employeeCount")} />
+          <Field label="雇用保険適用事業所番号(11桁)" value={form.employmentInsuranceOfficeNumber} onChange={setField("employmentInsuranceOfficeNumber")} />
+          <Field label="産業分類" value={form.industryCode} onChange={setField("industryCode")} />
+          <Field label="本社以外の事業所数" value={form.branchCount} onChange={setField("branchCount")} />
+          <Field label="労働者代表氏名" value={form.laborRepresentativeName} onChange={setField("laborRepresentativeName")} />
+          <Field label="職業能力開発推進者 部署" value={form.trainingPromotionDepartment} onChange={setField("trainingPromotionDepartment")} />
+          <Field label="職業能力開発推進者 役職" value={form.trainingPromotionTitle} onChange={setField("trainingPromotionTitle")} />
+          <Field label="職業能力開発推進者 氏名" value={form.trainingPromotionName} onChange={setField("trainingPromotionName")} />
         </div>
         {msg && (
           <p className={msg.type === "ok" ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
