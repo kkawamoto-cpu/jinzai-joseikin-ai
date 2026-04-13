@@ -281,12 +281,6 @@ export default function AIAssistant({
                   }
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
                 />
                 <button
                   className="btn-primary h-10 shrink-0"
@@ -297,7 +291,7 @@ export default function AIAssistant({
                 </button>
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                📎 会社謄本PDF / Excel / 画像など、🎤 で音声入力、💬 で対話。Enterで送信。
+                📎 会社謄本PDF / Excel / 画像など、🎤 で音声入力、💬 で対話。右の「送信」ボタンで送信します。
               </p>
             </div>
           </div>
