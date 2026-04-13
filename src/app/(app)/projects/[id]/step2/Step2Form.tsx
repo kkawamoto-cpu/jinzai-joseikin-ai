@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import StepFooter from "@/components/StepFooter";
+import StepAIAssist from "@/components/StepAIAssist";
 
 export default function Step2Form({
   projectId,
@@ -80,6 +81,12 @@ export default function Step2Form({
 
   return (
     <div>
+      <StepAIAssist
+        projectId={projectId}
+        stepCode="STEP_2_COMPANY_INFO"
+        label="企業基本情報をAIに任せる"
+        description="会社名等からAIがWebを検索し、法人番号・本社住所・資本金など全項目を自動入力します"
+      />
       <div className="card mb-4">
         <h2 className="text-lg font-bold">Step2 企業基本情報</h2>
         <p className="mt-1 text-sm text-slate-600">

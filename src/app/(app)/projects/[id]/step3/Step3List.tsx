@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import StepFooter from "@/components/StepFooter";
+import StepAIAssist from "@/components/StepAIAssist";
 
 type Office = {
   id: string;
@@ -60,6 +61,12 @@ export default function Step3List({
 
   return (
     <div>
+      <StepAIAssist
+        projectId={projectId}
+        stepCode="STEP_3_OFFICES"
+        label="事業所情報をAIに任せる"
+        description="会社情報・労働者数から本社・支社の情報をAIが自動で構成します"
+      />
       <div className="card mb-4">
         <h2 className="text-lg font-bold">Step3 事業所情報</h2>
         <p className="mt-1 text-sm text-slate-600">

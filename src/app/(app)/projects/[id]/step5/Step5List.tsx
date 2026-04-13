@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import StepFooter from "@/components/StepFooter";
+import StepAIAssist from "@/components/StepAIAssist";
 import { RISK_WORDS } from "@/lib/ai";
 
 const FORMATS = [
@@ -60,6 +61,12 @@ export default function Step5List({
 
   return (
     <div>
+      <StepAIAssist
+        projectId={projectId}
+        stepCode="STEP_5_TRAINING_INFO"
+        label="訓練情報をAIに作成させる"
+        description="事業展開・DX/GXとの関連性記述や受講料の相場まで仮設計します"
+      />
       <div className="card mb-4">
         <h2 className="text-lg font-bold">Step5 訓練情報</h2>
         <p className="mt-1 text-sm text-slate-600">

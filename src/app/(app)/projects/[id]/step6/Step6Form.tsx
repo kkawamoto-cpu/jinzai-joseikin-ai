@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import StepFooter from "@/components/StepFooter";
+import StepAIAssist from "@/components/StepAIAssist";
 
 const FIELDS: [string, string, string][] = [
   ["A. 経営理念・経営方針", "managementPhilosophy", "経営理念"],
@@ -68,6 +69,12 @@ export default function Step6Form({
     <div>
       <div className="card mb-4">
         <h2 className="text-lg font-bold">Step6 事業内職業能力開発計画</h2>
+        <StepAIAssist
+          projectId={projectId}
+          stepCode="STEP_6_INTERNAL_PLAN"
+          label="事業内職業能力開発計画をAIに作成させる"
+          description="会社規模・業種・訓練内容から経営理念〜人材育成方針まで計画書を一式生成します"
+        />
         <p className="mt-1 text-sm text-slate-600">
           本項目を入力し「ドラフト生成」を押すと、計画書のドラフトをAIが生成します。生成後、Step9でダウンロード・編集できます。
         </p>

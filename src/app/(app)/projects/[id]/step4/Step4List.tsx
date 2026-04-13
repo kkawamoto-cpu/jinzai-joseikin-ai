@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import StepFooter from "@/components/StepFooter";
+import StepAIAssist from "@/components/StepAIAssist";
 
 type Trainee = any;
 
@@ -40,6 +41,12 @@ export default function Step4List({
   };
   return (
     <div>
+      <StepAIAssist
+        projectId={projectId}
+        stepCode="STEP_4_TRAINEES"
+        label="受講者リストをAIに作成させる"
+        description="訓練内容とヒントから受講者の人数・職種・将来職務まで仮生成します"
+      />
       <div className="card mb-4">
         <h2 className="text-lg font-bold">Step4 受講者情報</h2>
         <p className="mt-1 text-sm text-slate-600">
