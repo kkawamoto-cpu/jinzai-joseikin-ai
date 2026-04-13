@@ -2,7 +2,8 @@
 // ドキュメント: https://ai.google.dev/gemini-api/docs
 // 環境変数 GEMINI_API_KEY 必須。未設定時はモックレスポンスを返します。
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// 注意: gemini-2.0-flash は無料枠が0のため使えません。gemini-2.5-flash を使用。
+const MODEL = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 export type ExtractedFormData = {
@@ -110,7 +111,8 @@ type Part =
   | { inline_data: { mime_type: string; data: string } };
 
 async function callGemini(parts: Part[], asJson: boolean): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // 余計なクォート・空白を除去
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
   if (!apiKey) {
     return JSON.stringify({
       notes:
