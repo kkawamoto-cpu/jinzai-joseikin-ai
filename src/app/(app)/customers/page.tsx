@@ -1,11 +1,19 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import CustomersManager from "./CustomersManager";
 
 export default async function CustomersPage() {
+  const user = (await getCurrentUser())!;
   const companies = await prisma.company.findMany({
     include: {
       projects: {
-        select: { id: true, projectName: true, status: true, progressPercent: true, updatedAt: true },
+        select: {
+          id: true,
+          projectName: true,
+          status: true,
+          progressPercent: true,
+          updatedAt: true,
+        },
       },
     },
     orderBy: { updatedAt: "desc" },
@@ -13,5 +21,5 @@ export default async function CustomersPage() {
   const safe = JSON.parse(
     JSON.stringify(companies, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
   );
-  return <CustomersManager initial={safe} />;
+  return <CustomersManager initial={safe} myCompanyId={user.companyId} />;
 }

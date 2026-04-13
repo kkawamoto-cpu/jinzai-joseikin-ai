@@ -23,25 +23,41 @@ const EMPTY: Company = {
   trainingPromotionName: "",
 };
 
-export default function CustomersManager({ initial }: { initial: Company[] }) {
+export default function CustomersManager({
+  initial,
+  myCompanyId,
+}: {
+  initial: Company[];
+  myCompanyId: string | null;
+}) {
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>(initial);
   const [editor, setEditor] = useState<{ mode: "create" | "edit"; data: Company } | null>(
     null
   );
   const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "customers" | "own">("customers");
   const [msg, setMsg] = useState<string | null>(null);
 
-  const filtered = companies.filter(
-    (c) =>
-      !query ||
-      (c.companyName ?? "").includes(query) ||
-      (c.representativeName ?? "").includes(query) ||
-      (c.headOfficeAddress ?? "").includes(query)
-  );
+  const isOwn = (c: Company) => !!myCompanyId && c.id === myCompanyId;
 
-  const totalProjects = companies.reduce((s, c) => s + (c.projects?.length ?? 0), 0);
-  const activeCustomers = companies.filter((c) => (c.projects?.length ?? 0) > 0).length;
+  const filtered = companies
+    .filter((c) => {
+      if (filterMode === "own") return isOwn(c);
+      if (filterMode === "customers") return !isOwn(c);
+      return true;
+    })
+    .filter(
+      (c) =>
+        !query ||
+        (c.companyName ?? "").includes(query) ||
+        (c.representativeName ?? "").includes(query) ||
+        (c.headOfficeAddress ?? "").includes(query)
+    );
+
+  const customersOnly = companies.filter((c) => !isOwn(c));
+  const totalProjects = customersOnly.reduce((s, c) => s + (c.projects?.length ?? 0), 0);
+  const activeCustomers = customersOnly.filter((c) => (c.projects?.length ?? 0) > 0).length;
 
   const save = async (data: Company) => {
     const isNew = !data.id;
@@ -94,12 +110,12 @@ export default function CustomersManager({ initial }: { initial: Company[] }) {
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "登録企業数", value: companies.length, tone: "from-indigo-600 to-purple-600" },
+          { label: "顧客企業数", value: customersOnly.length, tone: "from-indigo-600 to-purple-600" },
           { label: "アクティブ顧客", value: activeCustomers, tone: "from-emerald-500 to-teal-500" },
           { label: "累計案件数", value: totalProjects, tone: "from-slate-900 to-slate-700" },
           {
             label: "今月新規",
-            value: companies.filter((c) => {
+            value: customersOnly.filter((c) => {
               const d = new Date(c.createdAt);
               const n = new Date();
               return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth();
@@ -116,7 +132,28 @@ export default function CustomersManager({ initial }: { initial: Company[] }) {
         ))}
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+          {(
+            [
+              { k: "customers", l: `顧客のみ (${customersOnly.length})` },
+              { k: "own", l: "自社のみ" },
+              { k: "all", l: `すべて (${companies.length})` },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setFilterMode(t.k)}
+              className={`rounded-md px-3 py-1.5 font-medium ${
+                filterMode === t.k
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {t.l}
+            </button>
+          ))}
+        </div>
         <input
           className="input max-w-md"
           placeholder="🔍 企業名・代表者・住所で検索"
@@ -149,7 +186,10 @@ export default function CustomersManager({ initial }: { initial: Company[] }) {
                       {c.companyName?.charAt(0) || "？"}
                     </div>
                     <div>
-                      <div className="font-semibold text-slate-900">{c.companyName}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">{c.companyName}</span>
+                        {isOwn(c) && <span className="pill-purple">自社</span>}
+                      </div>
                       <div className="text-xs text-slate-500">法人番号: {c.corporateNumber || "—"}</div>
                     </div>
                   </div>
@@ -177,8 +217,10 @@ export default function CustomersManager({ initial }: { initial: Company[] }) {
                       編集
                     </button>
                     <button
-                      className="rounded-md px-2 py-1 text-xs text-rose-600 hover:bg-rose-50"
+                      className="rounded-md px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-30"
                       onClick={() => remove(c.id)}
+                      disabled={isOwn(c)}
+                      title={isOwn(c) ? "自社は削除できません" : "削除"}
                     >
                       削除
                     </button>

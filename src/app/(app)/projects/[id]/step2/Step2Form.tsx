@@ -1,8 +1,22 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import StepFooter from "@/components/StepFooter";
 import StepAIAssist from "@/components/StepAIAssist";
 import MemoryPanel from "@/components/MemoryPanel";
+
+function SaveBadge({ state }: { state: "idle" | "saving" | "saved" | "error" }) {
+  if (state === "saving")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-slate-500" />
+        保存中
+      </span>
+    );
+  if (state === "saved")
+    return <span className="pill-green">✓ 保存済み</span>;
+  if (state === "error") return <span className="pill-red">⚠ 保存失敗</span>;
+  return <span className="pill-gray">自動保存対応</span>;
+}
 
 // ※ この Field はコンポーネント外に定義することで、親の再レンダー時に
 // 新しい関数参照として再生成されず、input のフォーカスが保持される。
@@ -64,13 +78,17 @@ export default function Step2Form({
     trainingPromotionTitle: initial.trainingPromotionTitle ?? "",
     trainingPromotionName: initial.trainingPromotionName ?? "",
   });
-  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const initialMountRef = useRef(true);
 
   const setField = (k: keyof typeof form) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
-    setMsg(null);
+    setSaveState("saving");
+    setErrorMsg(null);
     const payload: any = { ...form };
     payload.capitalAmount = form.capitalAmount ? Number(form.capitalAmount) : undefined;
     payload.employeeCount = form.employeeCount !== "" ? Number(form.employeeCount) : undefined;
@@ -82,11 +100,27 @@ export default function Step2Form({
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      setMsg({ type: "err", text: j.error || "保存に失敗しました" });
+      setSaveState("error");
+      setErrorMsg(j.error || "保存に失敗しました");
       return;
     }
-    setMsg({ type: "ok", text: "保存しました" });
+    setSaveState("saved");
+    setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 2000);
   };
+
+  // 自動保存（800ms debounce）
+  useEffect(() => {
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => save(), 800);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
 
   return (
     <div>
@@ -102,11 +136,15 @@ export default function Step2Form({
         onLoad={(data) => setForm({ ...form, ...data })}
         title="🧠 企業情報メモリ（過去の入力を再利用）"
       />
-      <div className="card mb-4">
-        <h2 className="text-lg font-bold">Step2 企業基本情報</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          助成金申請に必要な企業の基本情報を入力してください。法人番号は13桁、雇用保険適用事業所番号は11桁です。
-        </p>
+      <div className="card mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold">Step2 企業基本情報</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            助成金申請に必要な企業の基本情報を入力してください。法人番号は13桁、雇用保険適用事業所番号は11桁です。
+            <span className="ml-2 inline-block">入力すると自動保存されます。</span>
+          </p>
+        </div>
+        <SaveBadge state={saveState} />
       </div>
 
       <div className="card space-y-4">
@@ -132,11 +170,7 @@ export default function Step2Form({
           <Field label="職業能力開発推進者 役職" value={form.trainingPromotionTitle} onChange={setField("trainingPromotionTitle")} />
           <Field label="職業能力開発推進者 氏名" value={form.trainingPromotionName} onChange={setField("trainingPromotionName")} />
         </div>
-        {msg && (
-          <p className={msg.type === "ok" ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
-            {msg.text}
-          </p>
-        )}
+        {errorMsg && <p className="text-sm text-rose-600">{errorMsg}</p>}
       </div>
 
       <StepFooter

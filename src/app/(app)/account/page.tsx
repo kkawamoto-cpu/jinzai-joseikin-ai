@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import ProfileEditor from "./ProfileEditor";
+import CompanyEditor from "./CompanyEditor";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "管理者",
@@ -14,6 +15,11 @@ export default async function AccountPage() {
   const company = user.companyId
     ? await prisma.company.findUnique({ where: { id: user.companyId } })
     : null;
+  const safeCompany = company
+    ? JSON.parse(
+        JSON.stringify(company, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
+      )
+    : null;
 
   const myProjects = await prisma.project.count({
     where:
@@ -23,20 +29,13 @@ export default async function AccountPage() {
   });
   const totalActivity = await prisma.activityLog.count({ where: { userId: user.id } });
 
-  const info = (label: string, value: string | null | undefined) => (
-    <div className="flex items-center justify-between border-b border-slate-100 py-3 last:border-0">
-      <dt className="text-sm text-slate-500">{label}</dt>
-      <dd className="text-sm font-medium text-slate-900">{value || "—"}</dd>
-    </div>
-  );
-
   return (
-    <div className="mx-auto max-w-5xl p-8">
+    <div className="mx-auto max-w-6xl p-8">
       <div className="mb-8">
         <div className="section-title mb-1">マイページ</div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">アカウント情報</h1>
         <p className="mt-1 text-sm text-slate-600">
-          プロフィール・所属企業・操作履歴を確認できます。
+          プロフィール・所属企業（自社）情報を編集できます。入力は自動保存されます。
         </p>
       </div>
 
@@ -53,6 +52,11 @@ export default async function AccountPage() {
             {user.isActive && <span className="pill-green">アクティブ</span>}
           </div>
           <p className="mt-1 text-sm text-slate-600">{user.email}</p>
+          {safeCompany && (
+            <p className="mt-2 text-xs text-slate-500">
+              🏢 所属企業: <span className="font-medium">{safeCompany.companyName}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -74,31 +78,17 @@ export default async function AccountPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* プロフィール編集 */}
+      <div className="mb-6">
         <ProfileEditor initial={{ name: user.name, email: user.email }} />
-
-        {/* 所属企業 */}
-        <div className="card">
-          <h3 className="mb-2 text-sm font-bold text-slate-900">所属企業</h3>
-          {company ? (
-            <dl>
-              {info("企業名", company.companyName)}
-              {info("代表者", company.representativeName)}
-              {info("本社所在地", company.headOfficeAddress)}
-              {info("法人番号", company.corporateNumber)}
-              {info("従業員数", company.employeeCount ? String(company.employeeCount) : null)}
-              {info(
-                "資本金",
-                company.capitalAmount ? `¥${Number(company.capitalAmount).toLocaleString()}` : null
-              )}
-            </dl>
-          ) : (
-            <p className="py-8 text-center text-sm text-slate-500">所属企業は未登録です</p>
-          )}
-        </div>
       </div>
 
+      {safeCompany ? (
+        <CompanyEditor initial={safeCompany} />
+      ) : (
+        <div className="card py-12 text-center text-sm text-slate-500">
+          所属企業が未登録です。管理者にお問合せください。
+        </div>
+      )}
     </div>
   );
 }

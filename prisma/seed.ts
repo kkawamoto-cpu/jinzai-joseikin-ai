@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Seeding...");
 
-  // クリーンアップ
+  // クリーンアップ（FK依存の順に）
   await prisma.activityLog.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.handoffRecord.deleteMany();
@@ -19,6 +19,8 @@ async function main() {
   await prisma.trainee.deleteMany();
   await prisma.office.deleteMany();
   await prisma.projectStep.deleteMany();
+  await prisma.trainingDesign.deleteMany();
+  await prisma.userMemory.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
   await prisma.company.deleteMany();
@@ -27,7 +29,36 @@ async function main() {
   const mainPw = await bcrypt.hash("Huchaholdings0104", 10);
   const guestPw = await bcrypt.hash("aijoseikun", 10);
 
-  const company = await prisma.company.create({
+  // 【自社1】Hucha Holdings（メインアカウントの所属企業）
+  const huchaCompany = await prisma.company.create({
+    data: {
+      companyName: "Hucha Holdings株式会社",
+      representativeName: "河本 康平",
+      representativeTitle: "代表取締役",
+      headOfficeAddress: "東京都",
+      headOfficePhone: "",
+      capitalAmount: null,
+      corporateNumber: "",
+      employeeCount: 0,
+      industryCode: "",
+      branchCount: 0,
+    },
+  });
+
+  // 【自社2】AI助成くん（ゲストアカウントの所属企業）
+  const guestCompany = await prisma.company.create({
+    data: {
+      companyName: "AI助成くん株式会社（ゲスト自社）",
+      representativeName: "",
+      representativeTitle: "",
+      headOfficeAddress: "",
+      employeeCount: 0,
+      branchCount: 0,
+    },
+  });
+
+  // 【顧客企業1】株式会社サンプルテック（デモ案件が紐づく顧客）
+  const sampleCompany = await prisma.company.create({
     data: {
       companyName: "株式会社サンプルテック",
       representativeName: "山田 太郎",
@@ -47,13 +78,29 @@ async function main() {
     },
   });
 
+  // 【顧客企業2】サンプル顧客B（CRMらしさを出すため）
+  await prisma.company.create({
+    data: {
+      companyName: "株式会社グリーンマニュファクチャ",
+      representativeName: "田中 健一",
+      representativeTitle: "代表取締役社長",
+      headOfficeAddress: "神奈川県横浜市中区本町1-1-1",
+      headOfficePhone: "045-111-2222",
+      capitalAmount: BigInt(30_000_000),
+      corporateNumber: "9876543210987",
+      employeeCount: 120,
+      industryCode: "29",
+      branchCount: 3,
+    },
+  });
+
   const demo = await prisma.user.create({
     data: {
-      name: "Hucha Holdings",
+      name: "河本 康平",
       email: "info@hucha.co.jp",
       passwordHash: mainPw,
       role: "ADMIN",
-      companyId: company.id,
+      companyId: huchaCompany.id,
     },
   });
   await prisma.user.create({
@@ -62,15 +109,15 @@ async function main() {
       email: "info@aijoseikun.com",
       passwordHash: guestPw,
       role: "ADMIN",
-      companyId: company.id,
+      companyId: guestCompany.id,
     },
   });
 
-  // 案件1（入力途中）
+  // 案件1（入力途中）: 顧客であるサンプルテック社の申請をHucha Holdingsが代行する想定
   const project1 = await prisma.project.create({
     data: {
       projectName: "2026年度 AI・DXリスキリング訓練",
-      companyId: company.id,
+      companyId: sampleCompany.id,
       subsidyCourse: "JIGYO_TENKAI_RESKILLING",
       status: "INPUTTING",
       trainingStartDate: new Date("2026-06-01"),
