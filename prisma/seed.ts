@@ -23,8 +23,9 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.company.deleteMany();
 
-  // ワンアカウントで運用：ADMIN権限で全機能利用可能
-  const pw = await bcrypt.hash("demo", 10);
+  // Hucha Holdings（メイン）と AI助成くん（ゲスト）の2アカウント
+  const mainPw = await bcrypt.hash("Huchaholdings0104", 10);
+  const guestPw = await bcrypt.hash("aijoseikun", 10);
 
   const company = await prisma.company.create({
     data: {
@@ -48,9 +49,18 @@ async function main() {
 
   const demo = await prisma.user.create({
     data: {
-      name: "デモユーザー",
-      email: "demo@example.com",
-      passwordHash: pw,
+      name: "Hucha Holdings",
+      email: "info@hucha.co.jp",
+      passwordHash: mainPw,
+      role: "ADMIN",
+      companyId: company.id,
+    },
+  });
+  await prisma.user.create({
+    data: {
+      name: "AI助成くん ゲスト",
+      email: "info@aijoseikun.com",
+      passwordHash: guestPw,
       role: "ADMIN",
       companyId: company.id,
     },
@@ -196,7 +206,8 @@ async function main() {
   });
 
   console.log("✅ Seed complete.");
-  console.log("ログイン: demo@example.com / demo");
+  console.log("メイン: info@hucha.co.jp / Huchaholdings0104");
+  console.log("ゲスト: info@aijoseikun.com / aijoseikun");
 }
 
 main()

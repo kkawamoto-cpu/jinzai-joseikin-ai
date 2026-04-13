@@ -29,6 +29,7 @@ export default function AppShell({
 
   const mainNav: NavItem[] = [
     { href: "/projects", label: "案件一覧", icon: "📁", show: true },
+    { href: "/training-design", label: "研修開発", icon: "🎨", show: true },
     { href: "/customers", label: "顧客管理", icon: "👥", show: true },
     { href: "/gantt", label: "スケジュール", icon: "📅", show: true },
   ];
@@ -67,10 +68,10 @@ export default function AppShell({
         <div className="px-5 pt-6 pb-4">
           <Link href="/projects" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md">
-              <span className="text-base font-bold">✦</span>
+              <span className="text-base font-bold">AI</span>
             </div>
             <div>
-              <div className="text-sm font-bold leading-tight text-slate-900">JinzaiAI</div>
+              <div className="text-sm font-bold leading-tight text-slate-900">AI助成くん</div>
               <div className="text-[10px] font-medium text-slate-500">助成金申請プラットフォーム</div>
             </div>
           </Link>
@@ -102,22 +103,24 @@ export default function AppShell({
           </div>
         </nav>
 
-        {/* ユーザー情報 */}
-        <div className="border-t border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-sm font-bold text-white">
-              {user.name.charAt(0)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-slate-900">{user.name}</div>
-              <div className="flex items-center gap-1">
-                <span className="pill-blue">{ROLE_LABEL[user.role] ?? user.role}</span>
+        {/* ユーザー情報（クリックで /account に遷移） */}
+        <div className="border-t border-slate-200 p-3">
+          <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-2 transition hover:bg-slate-100">
+            <Link href="/account" className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-sm font-bold text-white">
+                {user.name.charAt(0)}
               </div>
-            </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-slate-900">{user.name}</div>
+                <div className="mt-0.5">
+                  <span className="pill-blue">{ROLE_LABEL[user.role] ?? user.role}</span>
+                </div>
+              </div>
+            </Link>
             <button
               onClick={logout}
               aria-label="ログアウト"
-              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white hover:text-slate-700"
               title="ログアウト"
             >
               ⎋
