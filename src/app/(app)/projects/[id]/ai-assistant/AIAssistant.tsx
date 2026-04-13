@@ -192,8 +192,8 @@ export default function AIAssistant({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* チャット画面 */}
         <div className="lg:col-span-2">
-          <div className="card h-[600px] overflow-hidden p-0">
-            <div ref={chatRef} className="h-[500px] overflow-y-auto p-4 space-y-3">
+          <div className="card flex h-[70vh] flex-col overflow-hidden p-0 lg:h-[600px]">
+            <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div

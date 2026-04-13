@@ -23,35 +23,35 @@ export default async function ProjectLayout({
 
   return (
     <div>
-      <header className="border-b bg-white px-8 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-xs text-slate-500">
+      <header className="border-b bg-white px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs text-slate-500">
               <Link href="/projects" className="hover:underline">
                 案件一覧
               </Link>
               <span className="mx-1">/</span>
               <span>{project.company.companyName}</span>
             </div>
-            <h1 className="mt-0.5 text-lg font-bold">{project.projectName}</h1>
+            <h1 className="mt-0.5 text-base font-bold sm:text-lg">{project.projectName}</h1>
           </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <Link
-              href={`/projects/${project.id}/ai-assistant`}
-              className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-brand-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
-            >
-              🪄 AI入力代行
-            </Link>
+          <Link
+            href={`/projects/${project.id}/ai-assistant`}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-brand-600 to-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+          >
+            🪄 AI入力代行
+          </Link>
+          <div className="flex w-full flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="pill-blue">
               {project.subsidyCourse === "JIGYO_TENKAI_RESKILLING"
-                ? "事業展開等リスキリング支援コース"
+                ? "事業展開等リスキリング支援"
                 : project.subsidyCourse}
             </span>
             <span>進捗 {project.progressPercent}%</span>
           </div>
         </div>
       </header>
-      <div className="px-8 py-6">
+      <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
         <Stepper projectId={project.id} stepStatuses={stepStatuses as any} />
         {children}
       </div>

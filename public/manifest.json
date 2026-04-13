@@ -1,0 +1,19 @@
+{
+  "name": "AI助成くん",
+  "short_name": "AI助成くん",
+  "description": "人材開発支援助成金の申請準備から研修設計まで一気通貫で支援するAIプラットフォーム",
+  "start_url": "/projects",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -50,12 +50,12 @@ export default async function ProjectsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
+    <div className="page">
       {/* Hero */}
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8 sm:gap-4">
         <div>
           <div className="section-title mb-1">ダッシュボード</div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">案件一覧</h1>
+          <h1 className="page-title">案件一覧</h1>
           <p className="mt-1 text-sm text-slate-600">助成金申請準備の案件を一元管理します。</p>
         </div>
         {(user.role === "ADMIN" || user.role === "CLIENT") && <NewProjectButton />}

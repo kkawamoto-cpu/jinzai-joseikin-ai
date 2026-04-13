@@ -94,11 +94,11 @@ export default function CustomersManager({
   };
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div className="page">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8 sm:gap-4">
         <div>
           <div className="section-title mb-1">顧客管理</div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">顧客データベース</h1>
+          <h1 className="page-title">顧客データベース</h1>
           <p className="mt-1 text-sm text-slate-600">
             登録企業情報を新規追加・編集・削除できます。
           </p>
@@ -165,6 +165,7 @@ export default function CustomersManager({
       {msg && <p className="mb-3 text-sm text-rose-600">{msg}</p>}
 
       <div className="card overflow-hidden p-0">
+       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50 text-xs font-medium text-slate-500">
             <tr>
@@ -237,6 +238,7 @@ export default function CustomersManager({
             )}
           </tbody>
         </table>
+       </div>
       </div>
 
       {editor && (

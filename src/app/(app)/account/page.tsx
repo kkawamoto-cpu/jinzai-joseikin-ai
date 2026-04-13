@@ -30,10 +30,10 @@ export default async function AccountPage() {
   const totalActivity = await prisma.activityLog.count({ where: { userId: user.id } });
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
-      <div className="mb-8">
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 sm:mb-8">
         <div className="section-title mb-1">マイページ</div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">アカウント情報</h1>
+        <h1 className="page-title">アカウント情報</h1>
         <p className="mt-1 text-sm text-slate-600">
           プロフィール・所属企業（自社）情報を編集できます。入力は自動保存されます。
         </p>

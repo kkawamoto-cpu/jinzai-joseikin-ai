@@ -6,6 +6,21 @@ import NavigationProgress from "@/components/NavigationProgress";
 export const metadata: Metadata = {
   title: "AI助成くん - 人材開発支援助成金申請プラットフォーム",
   description: "人材開発支援助成金の申請準備から研修設計まで一気通貫で支援するAIプラットフォーム",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "AI助成くん",
+  },
+  themeColor: "#6366f1",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#6366f1",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

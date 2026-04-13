@@ -123,7 +123,7 @@ export default function DesignWorkspace({ initial }: { initial: Design }) {
     : null;
 
   return (
-    <div className="mx-auto max-w-[1400px] p-6">
+    <div className="mx-auto max-w-[1400px] p-4 sm:p-6">
       {/* Header */}
       <div className="mb-4">
         <div className="text-xs text-slate-500">

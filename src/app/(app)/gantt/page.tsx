@@ -42,7 +42,7 @@ export default async function GanttPage() {
   const todayPct = Math.max(0, Math.min(100, pct(today)));
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
+    <div className="page">
       <div className="mb-8">
         <div className="section-title mb-1">スケジュール</div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">ガントチャート</h1>

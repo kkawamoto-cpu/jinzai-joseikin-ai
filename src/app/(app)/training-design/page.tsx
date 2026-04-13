@@ -25,7 +25,7 @@ export default async function TrainingDesignPage() {
   });
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
+    <div className="page">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="section-title mb-1">研修開発</div>

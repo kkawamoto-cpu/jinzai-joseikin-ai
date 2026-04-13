@@ -23,9 +23,23 @@ body {
 }
 
 @layer components {
+  /* ===== Layout helpers ===== */
+  .page {
+    @apply mx-auto max-w-7xl p-4 sm:p-6 lg:p-8;
+  }
+  .page-narrow {
+    @apply mx-auto max-w-5xl p-4 sm:p-6 lg:p-8;
+  }
+  .page-title {
+    @apply text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl;
+  }
+  .table-wrap {
+    @apply overflow-x-auto -mx-4 sm:mx-0;
+  }
+
   /* ===== Buttons ===== */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150;
+    @apply inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-150;
   }
   .btn-primary {
     @apply btn bg-slate-900 text-white shadow-sm hover:bg-slate-800 active:scale-[0.98];
@@ -45,7 +59,7 @@ body {
 
   /* ===== Cards ===== */
   .card {
-    @apply rounded-2xl border border-slate-200/60 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_1px_1px_rgba(15,23,42,0.03)];
+    @apply rounded-2xl border border-slate-200/60 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_1px_1px_rgba(15,23,42,0.03)] sm:p-6;
   }
   .card-hover {
     @apply card transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)];
@@ -53,8 +67,9 @@ body {
 
   /* ===== Form ===== */
   .input {
-    @apply block w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm placeholder-slate-400 shadow-sm transition focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10;
+    @apply block w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-base placeholder-slate-400 shadow-sm transition focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 sm:text-sm;
   }
+  /* ↑ モバイルではtext-baseに（iOS Safariの自動ズーム防止 = 16px以上） */
   .label {
     @apply mb-1.5 block text-xs font-medium text-slate-700;
   }
