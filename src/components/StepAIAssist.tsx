@@ -37,7 +37,8 @@ export default function StepAIAssist({
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setResult({ ok: false, text: j.error || "AIによる入力に失敗しました" });
+        const detail = j.error || `HTTP ${res.status}`;
+        setResult({ ok: false, text: `AI入力失敗: ${detail}` });
         return;
       }
       const j = await res.json();

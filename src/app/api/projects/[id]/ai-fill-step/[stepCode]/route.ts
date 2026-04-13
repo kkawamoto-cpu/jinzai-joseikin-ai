@@ -4,15 +4,98 @@ import { getCurrentUser } from "@/lib/auth";
 import { extractFromText } from "@/lib/gemini";
 import { logActivity } from "@/lib/api";
 
-/**
- * POST /api/projects/:id/ai-fill-step/:stepCode
- *
- * 各Step用のAI入力代行。既存のプロジェクト情報（会社情報・訓練情報など）を
- * コンテキストとして Gemini に与え、指定Stepの項目を仮説ベースで補完生成する。
- *
- * body: { hint?: string }  ユーザーからの追加ヒント（任意）
- * returns: { data: ExtractedFormData, applied?: any }  （applyFlag=true なら書き込みまで実施）
- */
+// ========== DBに保存可能なフィールドのホワイトリスト ==========
+const COMPANY_FIELDS = [
+  "companyName",
+  "representativeName",
+  "representativeTitle",
+  "headOfficeAddress",
+  "headOfficePhone",
+  "capitalAmount",
+  "corporateNumber",
+  "employeeCount",
+  "employmentInsuranceOfficeNumber",
+  "industryCode",
+  "branchCount",
+  "laborRepresentativeName",
+  "trainingPromotionDepartment",
+  "trainingPromotionTitle",
+  "trainingPromotionName",
+];
+const OFFICE_FIELDS = [
+  "officeType",
+  "officeName",
+  "officeNumber",
+  "employeeCount",
+  "address",
+];
+const TRAINEE_FIELDS = [
+  "fullName",
+  "gender",
+  "employmentInsuranceNumber",
+  "employmentType",
+  "currentJobRole",
+  "futureJobRole",
+  "targetTrainingName",
+  "isExecutiveDualRole",
+  "isOnChildcareLeave",
+  "isRemoteTraining",
+];
+const TRAINING_FIELDS = [
+  "trainingName",
+  "providerName",
+  "trainingFormat",
+  "trainingStartDate",
+  "trainingEndDate",
+  "totalTrainingHours",
+  "standardLearningHours",
+  "standardLearningPeriod",
+  "tuitionFee",
+  "admissionFee",
+  "materialFee",
+  "location",
+  "instructorName",
+  "curriculumText",
+  "completionCondition",
+  "instructionType",
+  "trainingType",
+  "relationToBusinessExpansion",
+  "relationToDxGx",
+  "relationToFutureRole",
+];
+const PLAN_FIELDS = [
+  "managementPhilosophy",
+  "managementPolicy",
+  "futureBusinessPolicy",
+  "focusArea",
+  "idealHumanResource",
+  "hrBasicPolicy",
+  "roleBasedDevelopmentPolicy",
+  "trainingPurpose",
+  "careerSupportPolicy",
+  "selfDevelopmentSupportPolicy",
+  "placementPolicy",
+  "promotionCriteria",
+  "evaluationCriteria",
+  "qualificationReflection",
+  "executiveSkillRequirements",
+  "midlevelSkillRequirements",
+  "juniorSkillRequirements",
+];
+const pickAllowed = (obj: any, fields: string[]) => {
+  const out: any = {};
+  if (!obj || typeof obj !== "object") return out;
+  for (const k of fields) {
+    if (k in obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+      out[k] = obj[k];
+  }
+  return out;
+};
+
+const TRAINING_FORMATS = ["ONSITE", "LIVE_ONLINE", "E_LEARNING", "CORRESPONDENCE", "SUBSCRIPTION"];
+const INSTRUCTION_TYPES = ["BUSINESS_ORDER", "VOLUNTARY"];
+const TRAINING_TYPES = ["OFF_JT", "OFF_JT_OJT"];
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string; stepCode: string } }
@@ -35,66 +118,29 @@ export async function POST(
   });
   if (!project) return NextResponse.json({ error: "Not Found" }, { status: 404 });
 
-  // BigInt を string に
   const ctx = JSON.parse(
     JSON.stringify(project, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
   );
 
-  // Stepごとの指示プロンプト
   const stepInstructions: Record<string, string> = {
-    STEP_2_COMPANY_INFO: `
-【対象Step】 Step2 企業基本情報
-【埋める項目】 company の全項目（companyName, representativeName, representativeTitle, headOfficeAddress, headOfficePhone, capitalAmount, corporateNumber, employeeCount, employmentInsuranceOfficeNumber, industryCode, branchCount, laborRepresentativeName, trainingPromotionDepartment, trainingPromotionTitle, trainingPromotionName）
-
-【仮説立案ルール】
-- 会社名が既に入っていれば、google_search ツールで「会社名 法人番号」「会社名 本社所在地」「会社名 資本金」を検索し、公開情報から自動補完してください。
-- 見つからない項目は、業界・規模から合理的な初期値を仮定（例: 職業能力開発推進者の部署→「人事部」、役職→「部長」、労働者代表→「（労働組合代表）」など）
-- 法人番号は 13桁の数値文字列。不明なら 空欄で null を設定せず項目省略。
-- 資本金は円単位の数値（例: 50000000）
-- 雇用保険適用事業所番号は 11桁の文字列、不明なら省略
-`,
-    STEP_3_OFFICES: `
-【対象Step】 Step3 事業所情報
-【埋める項目】 offices 配列（officeType, officeName, officeNumber, employeeCount, address）
-
-【仮説立案ルール】
-- company.headOfficeAddress があれば本社として1件提案
-- company.branchCount が N なら、「支社1」「支社2」... と N 件追加（住所は未定なら都道府県名のみ、または「（調査中）」）
-- 労働者数の合計が company.employeeCount に一致するよう按分（本社に7割、支社均等に3割など）
-`,
-    STEP_4_TRAINEES: `
-【対象Step】 Step4 受講者情報
-【埋める項目】 trainees 配列（fullName, gender, employmentInsuranceNumber, employmentType, currentJobRole, futureJobRole, targetTrainingName）
-
-【仮説立案ルール】
-- 訓練情報(trainings)から、受講対象者の人数・職種を推測（例: 「DXリスキリング訓練」なら営業・事務の中堅社員3〜5名）
-- ヒントに「社員3名」とあれば3名分を生成。氏名は「受講者A」「受講者B」のように仮置き、ユーザーが後で修正できるようにnotesに明記。
-- currentJobRole と futureJobRole の両方を埋める（審査で重視）
-- 雇用区分は「正社員」を初期値に
-`,
-    STEP_5_TRAINING_INFO: `
-【対象Step】 Step5 訓練情報
-【埋める項目】 trainings 配列（trainingName, providerName, trainingFormat, trainingStartDate, trainingEndDate, totalTrainingHours, standardLearningHours, tuitionFee, materialFee, curriculumText, completionCondition, instructionType, trainingType, relationToBusinessExpansion, relationToDxGx, relationToFutureRole）
-
-【仮説立案ルール】
-- 事業展開等リスキリング支援コース前提：OFF-JTで10時間以上、DX/GX関連の訓練を想定
-- 関連性の記述は必ず40文字以上、具体的に（事業展開・DX/GX・将来職務との明確な関連）
-- 提供事業者名が不明なら「（研修提供事業者 確認中）」
-- 費用が不明なら、研修形式と時間数から相場を推定（例: オンライン40時間 = 20万円前後）
-`,
-    STEP_6_INTERNAL_PLAN: `
-【対象Step】 Step6 事業内職業能力開発計画
-【埋める項目】 internalPlan の全項目
-
-【仮説立案ルール】
-- 会社情報（業種、規模、事業内容）と訓練情報から、経営理念・人材育成方針・昇進昇格基準等を具体的に生成
-- 各項目150〜300文字程度の充実した内容
-- 「自律的な人材」「DX推進」「リスキリング」等の審査で評価されるキーワードを盛り込む
-- 日本の中小企業として一般的・妥当な内容（過度に野心的でない）
-`,
+    STEP_2_COMPANY_INFO: `【対象Step】 Step2 企業基本情報
+【埋めるキー】 "company" のみ。 ${COMPANY_FIELDS.join(", ")}
+【方針】会社名から Google検索で法人番号・本社住所・資本金・雇用保険番号を補完。不明なら業界・規模から合理的な仮定。資本金は円単位の数値のみ。`,
+    STEP_3_OFFICES: `【対象Step】 Step3 事業所情報
+【埋めるキー】 "offices" 配列のみ。各要素のキー: ${OFFICE_FIELDS.join(", ")}
+【方針】本社+支社を構成。officeTypeは"MAIN"または"BRANCH"。労働者数合計が会社の従業員数に一致するよう按分。`,
+    STEP_4_TRAINEES: `【対象Step】 Step4 受講者情報
+【埋めるキー】 "trainees" 配列のみ。各要素のキー: ${TRAINEE_FIELDS.join(", ")}
+【方針】訓練内容とヒントから受講者を生成。氏名は「受講者A」等の仮置きでOK。currentJobRoleとfutureJobRole両方必須。employmentTypeは「正社員」を初期値に。`,
+    STEP_5_TRAINING_INFO: `【対象Step】 Step5 訓練情報
+【埋めるキー】 "trainings" 配列のみ。各要素のキー: ${TRAINING_FIELDS.join(", ")}
+【方針】OFF-JT 10時間以上、DX/GX関連のリスキリング訓練。関連性記述は40文字以上具体的に。trainingFormat:${TRAINING_FORMATS.join("/")}, instructionType:${INSTRUCTION_TYPES.join("/")}, trainingType:${TRAINING_TYPES.join("/")}。日付はYYYY-MM-DD。`,
+    STEP_6_INTERNAL_PLAN: `【対象Step】 Step6 事業内職業能力開発計画
+【埋めるキー】 "internalPlan" オブジェクトのみ。キー一覧: ${PLAN_FIELDS.join(", ")}
+【方針】会社情報・訓練情報から全項目を150〜300文字で生成。経営理念・人材育成方針・評価制度・職位別求められる能力など。日本の中小企業として一般的で妥当な内容に。`,
   };
 
-  const instruction = stepInstructions[params.stepCode] || "";
+  const instruction = stepInstructions[params.stepCode];
   if (!instruction) {
     return NextResponse.json(
       { error: `Step ${params.stepCode} はAI入力代行に対応していません` },
@@ -103,122 +149,171 @@ export async function POST(
   }
 
   const prompt = `
-あなたは人材開発支援助成金（事業展開等リスキリング支援コース）の入力代行AIです。以下のプロジェクトコンテキストを参考に、指定Stepの項目を**必ず埋めて**返してください。
+あなたは人材開発支援助成金（事業展開等リスキリング支援コース）の入力代行AIです。指定されたStepに対応するキーのみを含むJSONを生成してください。
 
 # 重要な方針
-- 情報が不足していても、**既存情報から合理的な仮説を立てて暫定値を入れる**こと。空欄を残さない。
+- 情報が不足していても、既存情報から合理的な仮説を立てて暫定値を入れる。空欄を残さない。
 - 会社名などから google_search / url_context を積極的に使い、公開情報で補完する。
-- 不確実な値には notes に「要確認」と明記する。
-- 既に入力済みの情報（contextにあるもの）は上書きせず、未入力項目のみ補完する。
+- **指定されたキー以外は絶対に含めないこと**。
 
-# プロジェクトコンテキスト
+# プロジェクトコンテキスト（既存データ）
 ${JSON.stringify(ctx, null, 2)}
 
-# ユーザーからの追加ヒント
+# 追加ヒント
 ${hint || "（特になし）"}
 
-# 埋める対象Stepの詳細指示
+# 対象Step指示
 ${instruction}
 
 # 出力形式
-前回指示したExtractedFormData構造の JSON を \`\`\`json ... \`\`\` コードブロックで返してください。
-該当Step以外の項目（たとえばStep2でrunningを埋めるなど）は含めないでください。
+\`\`\`json
+{ 指定されたルートキー: 値 }
+\`\`\`
 `;
 
-  const data = await extractFromText(prompt);
+  let data: any = {};
+  try {
+    data = await extractFromText(prompt);
+  } catch (e: any) {
+    console.error("AI fill step Gemini error:", e);
+    return NextResponse.json(
+      { error: "AI生成に失敗しました: " + (e?.message || "unknown") },
+      { status: 500 }
+    );
+  }
 
-  let applied: any = undefined;
+  let applied: any = {};
   if (apply) {
-    // ai-apply と同等の処理をインラインで
-    const d: any = data;
-    const act: Record<string, number> = {};
-    if (d.company && Object.keys(d.company).length > 0) {
-      const c: any = { ...d.company };
-      if (c.capitalAmount) {
-        try {
-          c.capitalAmount = BigInt(Math.round(Number(c.capitalAmount)));
-        } catch {
-          delete c.capitalAmount;
+    try {
+      // ============ 会社情報 ============
+      if (data.company) {
+        const c = pickAllowed(data.company, COMPANY_FIELDS);
+        if (c.capitalAmount) {
+          const n = Number(String(c.capitalAmount).replace(/[^\d.-]/g, ""));
+          if (Number.isFinite(n)) {
+            try {
+              c.capitalAmount = BigInt(Math.round(n));
+            } catch {
+              delete c.capitalAmount;
+            }
+          } else {
+            delete c.capitalAmount;
+          }
+        }
+        for (const k of ["employeeCount", "branchCount"]) {
+          if (k in c) {
+            const n = Number(c[k]);
+            c[k] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : undefined;
+            if (c[k] === undefined) delete c[k];
+          }
+        }
+        if (Object.keys(c).length > 0) {
+          await prisma.company.update({ where: { id: project.companyId }, data: c });
+          applied.company = Object.keys(c).length;
         }
       }
-      for (const k of Object.keys(c)) if (c[k] === "" || c[k] === null) delete c[k];
-      if (Object.keys(c).length > 0) {
-        await prisma.company.update({ where: { id: project.companyId }, data: c });
-        act.company = Object.keys(c).length;
+
+      // ============ 事業所 ============
+      if (Array.isArray(data.offices) && data.offices.length > 0) {
+        const base = await prisma.office.count({ where: { projectId: params.id } });
+        const valid = data.offices
+          .map((o: any, i: number) => {
+            const picked = pickAllowed(o, OFFICE_FIELDS);
+            if (!picked.officeName) picked.officeName = `事業所${base + i + 1}`;
+            picked.officeType =
+              picked.officeType === "MAIN" || picked.officeType === "BRANCH"
+                ? picked.officeType
+                : base + i === 0
+                ? "MAIN"
+                : "BRANCH";
+            const n = Number(picked.employeeCount);
+            picked.employeeCount = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+            return { ...picked, projectId: params.id, sortOrder: base + i };
+          })
+          .filter((o: any) => o.officeName);
+        if (valid.length) {
+          await prisma.office.createMany({ data: valid });
+          applied.offices = valid.length;
+        }
       }
-    }
-    if (d.offices?.length) {
-      const base = await prisma.office.count({ where: { projectId: params.id } });
-      await prisma.office.createMany({
-        data: d.offices.map((o: any, i: number) => ({
-          projectId: params.id,
-          officeType: o.officeType || (base + i === 0 ? "MAIN" : "BRANCH"),
-          officeName: o.officeName || "（事業所名未記載）",
-          officeNumber: o.officeNumber || null,
-          employeeCount: Number(o.employeeCount ?? 0),
-          address: o.address || null,
-          sortOrder: base + i,
-        })),
-      });
-      act.offices = d.offices.length;
-    }
-    if (d.trainees?.length) {
-      await prisma.trainee.createMany({
-        data: d.trainees.map((t: any) => ({
-          projectId: params.id,
-          fullName: t.fullName || "（氏名未記載）",
-          gender: t.gender || null,
-          employmentInsuranceNumber: t.employmentInsuranceNumber || null,
-          employmentType: t.employmentType || null,
-          currentJobRole: t.currentJobRole || null,
-          futureJobRole: t.futureJobRole || null,
-          targetTrainingName: t.targetTrainingName || null,
-          isExecutiveDualRole: !!t.isExecutiveDualRole,
-          isOnChildcareLeave: !!t.isOnChildcareLeave,
-          isRemoteTraining: !!t.isRemoteTraining,
-        })),
-      });
-      act.trainees = d.trainees.length;
-    }
-    if (d.trainings?.length) {
-      for (const t of d.trainings) {
-        await prisma.training.create({
-          data: {
-            projectId: params.id,
-            trainingName: t.trainingName || "（研修名未記載）",
-            providerName: t.providerName || null,
-            trainingFormat: t.trainingFormat || "LIVE_ONLINE",
-            trainingStartDate: t.trainingStartDate ? new Date(t.trainingStartDate) : null,
-            trainingEndDate: t.trainingEndDate ? new Date(t.trainingEndDate) : null,
-            totalTrainingHours: Number(t.totalTrainingHours ?? 0),
-            standardLearningHours: t.standardLearningHours ? Number(t.standardLearningHours) : null,
-            tuitionFee: Number(t.tuitionFee ?? 0),
-            materialFee: t.materialFee ? Number(t.materialFee) : null,
-            curriculumText: t.curriculumText || null,
-            completionCondition: t.completionCondition || null,
-            instructionType: t.instructionType || "BUSINESS_ORDER",
-            trainingType: t.trainingType || "OFF_JT",
-            relationToBusinessExpansion: t.relationToBusinessExpansion || null,
-            relationToDxGx: t.relationToDxGx || null,
-            relationToFutureRole: t.relationToFutureRole || null,
-          },
-        });
+
+      // ============ 受講者 ============
+      if (Array.isArray(data.trainees) && data.trainees.length > 0) {
+        const valid = data.trainees
+          .map((t: any) => {
+            const picked: any = pickAllowed(t, TRAINEE_FIELDS);
+            if (!picked.fullName) picked.fullName = "（氏名未記載）";
+            picked.isExecutiveDualRole = !!picked.isExecutiveDualRole;
+            picked.isOnChildcareLeave = !!picked.isOnChildcareLeave;
+            picked.isRemoteTraining = !!picked.isRemoteTraining;
+            return { ...picked, projectId: params.id };
+          });
+        if (valid.length) {
+          await prisma.trainee.createMany({ data: valid });
+          applied.trainees = valid.length;
+        }
       }
-      act.trainings = d.trainings.length;
-    }
-    if (d.internalPlan && Object.keys(d.internalPlan).length > 0) {
-      const p: any = { ...d.internalPlan };
-      for (const k of Object.keys(p)) if (p[k] === "" || p[k] === null) delete p[k];
-      if (Object.keys(p).length > 0) {
-        await prisma.internalCapabilityPlan.upsert({
-          where: { projectId: params.id },
-          create: { ...p, projectId: params.id },
-          update: p,
-        });
-        act.internalPlan = Object.keys(p).length;
+
+      // ============ 訓練 ============
+      if (Array.isArray(data.trainings) && data.trainings.length > 0) {
+        for (const t of data.trainings) {
+          const picked: any = pickAllowed(t, TRAINING_FIELDS);
+          if (!picked.trainingName) picked.trainingName = "（研修名未記載）";
+          if (!TRAINING_FORMATS.includes(picked.trainingFormat))
+            picked.trainingFormat = "LIVE_ONLINE";
+          if (!INSTRUCTION_TYPES.includes(picked.instructionType))
+            picked.instructionType = "BUSINESS_ORDER";
+          if (!TRAINING_TYPES.includes(picked.trainingType)) picked.trainingType = "OFF_JT";
+          for (const dk of ["trainingStartDate", "trainingEndDate"]) {
+            if (picked[dk]) {
+              const d = new Date(picked[dk]);
+              picked[dk] = isNaN(d.getTime()) ? null : d;
+            }
+          }
+          for (const nk of [
+            "totalTrainingHours",
+            "standardLearningHours",
+            "standardLearningPeriod",
+            "tuitionFee",
+            "admissionFee",
+            "materialFee",
+          ]) {
+            if (nk in picked) {
+              const n = Number(picked[nk]);
+              if (nk === "totalTrainingHours" || nk === "tuitionFee") {
+                picked[nk] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+              } else {
+                picked[nk] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+              }
+            }
+          }
+          await prisma.training.create({ data: { ...picked, projectId: params.id } });
+        }
+        applied.trainings = data.trainings.length;
       }
+
+      // ============ 事業内職業能力開発計画 ============
+      if (data.internalPlan && typeof data.internalPlan === "object") {
+        const p = pickAllowed(data.internalPlan, PLAN_FIELDS);
+        if (Object.keys(p).length > 0) {
+          await prisma.internalCapabilityPlan.upsert({
+            where: { projectId: params.id },
+            create: { ...p, projectId: params.id },
+            update: p,
+          });
+          applied.internalPlan = Object.keys(p).length;
+        }
+      }
+    } catch (e: any) {
+      console.error("AI fill step DB write error:", e);
+      return NextResponse.json(
+        {
+          error: "AI生成内容のDB保存に失敗しました: " + (e?.message || "unknown"),
+          aiData: data,
+        },
+        { status: 500 }
+      );
     }
-    applied = act;
   }
 
   await logActivity(
