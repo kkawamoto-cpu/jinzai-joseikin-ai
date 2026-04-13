@@ -18,7 +18,11 @@ export async function GET() {
     include: { company: true, steps: true },
     orderBy: { updatedAt: "desc" },
   });
-  return NextResponse.json({ projects });
+  // BigInt(資本金等) をシリアライズ可能に変換
+  const safe = JSON.parse(
+    JSON.stringify(projects, (_k, v) => (typeof v === "bigint" ? v.toString() : v))
+  );
+  return NextResponse.json({ projects: safe });
 }
 
 export async function POST(req: NextRequest) {
