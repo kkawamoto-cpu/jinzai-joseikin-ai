@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import ProfileEditor from "./ProfileEditor";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "管理者",
@@ -74,17 +75,8 @@ export default async function AccountPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* プロフィール詳細 */}
-        <div className="card">
-          <h3 className="mb-2 text-sm font-bold text-slate-900">プロフィール</h3>
-          <dl>
-            {info("氏名", user.name)}
-            {info("メール", user.email)}
-            {info("ロール", ROLE_LABEL[user.role] ?? user.role)}
-            {info("ユーザーID", user.id)}
-            {info("ステータス", user.isActive ? "有効" : "無効")}
-          </dl>
-        </div>
+        {/* プロフィール編集 */}
+        <ProfileEditor initial={{ name: user.name, email: user.email }} />
 
         {/* 所属企業 */}
         <div className="card">
@@ -107,9 +99,6 @@ export default async function AccountPage() {
         </div>
       </div>
 
-      <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        💡 プロフィール編集機能は今後のアップデートで追加予定です。現在は Admin 経由で管理者に変更依頼をしてください。
-      </div>
     </div>
   );
 }
