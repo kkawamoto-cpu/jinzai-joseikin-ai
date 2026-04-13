@@ -120,7 +120,13 @@ type Part =
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function callGemini(parts: Part[], asJson: boolean): Promise<string> {
+type GeminiOptions = {
+  asJson?: boolean;
+  useTools?: boolean; // url_context + google_search を有効化
+};
+
+async function callGemini(parts: Part[], opts: GeminiOptions = {}): Promise<string> {
+  const { asJson = false, useTools = false } = opts;
   // 余計なクォート・空白を除去
   const apiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
   if (!apiKey) {
@@ -129,12 +135,21 @@ async function callGemini(parts: Part[], asJson: boolean): Promise<string> {
         "GEMINI_API_KEYが未設定のためモックを返しています。Vercelの環境変数にキーを設定してください。",
     });
   }
+
+  // Gemini のツール（URL読み込み + Google検索）を使うと、
+  // JSONモード（responseMimeType）は併用できない仕様なので、自然文→JSON抽出に切替
   const body: any = {
     contents: [{ parts }],
-    generationConfig: asJson
-      ? { responseMimeType: "application/json", temperature: 0.3 }
-      : { temperature: 0.7 },
+    generationConfig:
+      asJson && !useTools
+        ? { responseMimeType: "application/json", temperature: 0.3 }
+        : { temperature: useTools ? 0.4 : 0.7 },
   };
+  if (useTools) {
+    // https://ai.google.dev/gemini-api/docs/url-context
+    // https://ai.google.dev/gemini-api/docs/grounding
+    body.tools = [{ url_context: {} }, { google_search: {} }];
+  }
 
   // 503/429 リトライ + モデルフォールバック
   let lastErr: { status: number; text: string } | null = null;
@@ -148,17 +163,25 @@ async function callGemini(parts: Part[], asJson: boolean): Promise<string> {
         });
         if (res.ok) {
           const data = await res.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          // 複数パートを連結（ツール使用時は複数返る場合がある）
+          const partsOut: any[] = data?.candidates?.[0]?.content?.parts ?? [];
+          const text = partsOut.map((p: any) => p?.text ?? "").join("\n").trim();
           return text;
         }
         const err = await res.text();
         lastErr = { status: res.status, text: err };
-        // 503/429/500 はリトライ。404 はモデル切替。それ以外は即時エラー。
-        if (res.status === 404) break; // モデル無し → 次のモデルへ
+        if (res.status === 404) break;
+        if (res.status === 400 && useTools && /tool|function/i.test(err)) {
+          // ツール非対応モデルの場合、ツールなしで再試行（1回のみ）
+          delete body.tools;
+          body.generationConfig = asJson
+            ? { responseMimeType: "application/json", temperature: 0.3 }
+            : { temperature: 0.7 };
+          continue;
+        }
         if (![429, 500, 503].includes(res.status)) {
           throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 300)}`);
         }
-        // exponential backoff: 1s, 2s, 4s
         await sleep(1000 * Math.pow(2, attempt));
       } catch (e: any) {
         if (attempt === 2) lastErr = { status: 0, text: String(e.message || e) };
@@ -187,7 +210,8 @@ export async function extractFromFile(
     },
     { inline_data: { mime_type: mimeType, data: base64 } },
   ];
-  const text = await callGemini(parts, true);
+  // ファイル抽出時はURL/検索ツール不要（ファイル内容から抽出するため）
+  const text = await callGemini(parts, { asJson: true });
   return safeParseJson(text);
 }
 
@@ -195,9 +219,12 @@ export async function extractFromFile(
 export async function extractFromText(text: string): Promise<ExtractedFormData> {
   const parts: Part[] = [
     { text: EXTRACTION_SCHEMA_PROMPT },
-    { text: `\n\n【入力テキスト】\n${text}` },
+    {
+      text: `\n\n【入力テキスト】\n${text}\n\nテキスト中にURLがある場合は、url_contextツールでそのページを開いて情報を読み取ってください。会社名が分かる場合はgoogle_searchツールで法人番号や住所などの公開情報を検索して補完してください。`,
+    },
   ];
-  const out = await callGemini(parts, true);
+  // URLや会社名が含まれる場合に備えてツール有効化
+  const out = await callGemini(parts, { asJson: true, useTools: true });
   return safeParseJson(out);
 }
 
@@ -207,49 +234,72 @@ export async function chatExtract(
   currentData: ExtractedFormData
 ): Promise<{ reply: string; merged: ExtractedFormData; done: boolean }> {
   const system = `
-あなたは人材開発支援助成金申請の入力代行AIです。ユーザーとの対話を通じて、申請に必要な情報を丁寧に聞き出してください。
+あなたは人材開発支援助成金申請の入力代行AIです。ユーザーとの対話と、Web検索・URL読み取りを駆使して、申請に必要な情報を能動的に集めてください。
 
-【ルール】
-1. 一度に2〜3個の質問までに絞る（ユーザーの負担を減らす）
-2. 専門用語は避け、分かりやすい言葉で質問する
-3. ユーザーの回答から情報が抽出できたら、structuredDataに反映
-4. 全項目の最低限の情報が集まったら done=true にする
-5. 日本語で返答
+【必ず守るルール】
+1. ユーザーがURL（https://...）を貼り付けたら、**必ず url_context ツールでそのページを開いて** 会社名・所在地・代表者・事業内容を読み取り、structuredDataに反映する。URLが読めないという返答を繰り返してはいけない。
+2. 会社名が判明したら、**google_search ツールで「会社名 法人番号」「会社名 本社所在地」を検索** して、法人番号(13桁)・本店住所・資本金・設立年月日・代表者名などの公開情報を自動取得する。
+3. 同じ質問を繰り返さない。前の会話で既に回答が得られた項目は再度聞かない。
+4. 一度に聞く質問は最大2個まで（ユーザーの負担軽減）。
+5. 専門用語は避け、平易な日本語で質問する。
+6. 情報取得後は「○○を検索して見つけました: △△ でよろしいですか？」のように確認する。
+7. currentDataと結合できる最低限の情報（会社名・所在地・従業員数・訓練内容の概要）が集まったら done=true にする。
+8. 出力は **JSONコードブロック** で以下の構造に従う：
+
+\`\`\`json
+{
+  "reply": "ユーザーへの次のメッセージ",
+  "structuredData": { 下記ExtractedFormData構造 },
+  "done": false
+}
+\`\`\`
+
+【ExtractedFormData構造】
+${EXTRACTION_SCHEMA_PROMPT}
 
 【既に集まっている情報】
 ${JSON.stringify(currentData, null, 2)}
-
-【出力JSON構造】
-{
-  "reply": "ユーザーへの次のメッセージ。質問や確認など。",
-  "structuredData": { 上記のExtractedFormData構造 },
-  "done": false
-}
 `;
   const convo = messages
     .map((m) => `${m.role === "user" ? "ユーザー" : "AI"}: ${m.text}`)
     .join("\n");
   const parts: Part[] = [{ text: system }, { text: `\n\n【会話ログ】\n${convo}` }];
-  const out = await callGemini(parts, true);
+  // ツール（URL読み取り + Google検索）を有効化
+  const out = await callGemini(parts, { asJson: true, useTools: true });
   const parsed = safeParseJson(out) as any;
   const merged = mergeExtracted(currentData, parsed.structuredData ?? {});
   return {
     reply:
       parsed.reply ||
-      "ご回答ありがとうございます。続けて、会社の経営方針や今後の事業展開について教えてください。",
+      out.replace(/```json[\s\S]*?```/g, "").trim() ||
+      "続けて情報を教えてください。",
     merged,
     done: !!parsed.done,
   };
 }
 
 function safeParseJson(text: string): ExtractedFormData {
-  try {
-    // ```json ブロックを除去
-    const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*$/g, "").trim();
-    return JSON.parse(cleaned);
-  } catch {
-    return { notes: `JSON解析失敗: ${text.slice(0, 200)}` };
+  if (!text) return { notes: "AIから空の応答でした" };
+  // ```json ... ``` のコードブロックを優先
+  const fence = text.match(/```json\s*([\s\S]*?)```/i) || text.match(/```\s*([\s\S]*?)```/);
+  const candidates: string[] = [];
+  if (fence) candidates.push(fence[1]);
+  // 最初の { から最後の } までを抽出
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(text.slice(firstBrace, lastBrace + 1));
   }
+  candidates.push(text.trim());
+  for (const c of candidates) {
+    try {
+      return JSON.parse(c);
+    } catch {
+      /* try next */
+    }
+  }
+  // JSONとして解釈できない場合は reply としてそのまま返す
+  return { notes: text.slice(0, 500) } as any;
 }
 
 export function mergeExtracted(a: ExtractedFormData, b: ExtractedFormData): ExtractedFormData {
