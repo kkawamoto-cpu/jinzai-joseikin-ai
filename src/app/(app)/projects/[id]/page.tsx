@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import PlanNotificationButton from "@/components/PlanNotificationButton";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "未着手",
@@ -118,6 +119,8 @@ export default async function Dashboard({ params }: { params: { id: string } }) 
           </Link>
         </div>
       </div>
+
+      <PlanNotificationButton projectId={project.id} />
 
       <div className="card">
         <h2 className="mb-3 font-semibold">次にやること</h2>

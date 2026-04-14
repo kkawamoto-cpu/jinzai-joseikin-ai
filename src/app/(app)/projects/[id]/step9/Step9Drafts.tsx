@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import StepFooter from "@/components/StepFooter";
+import PlanNotificationButton from "@/components/PlanNotificationButton";
 
 const LABELS: Record<string, string> = {
   INTERNAL_PLAN_DRAFT: "事業内職業能力開発計画",
@@ -93,6 +94,10 @@ export default function Step9Drafts({
           )}
         </div>
       )}
+
+      <div className="mt-6">
+        <PlanNotificationButton projectId={projectId} />
+      </div>
 
       <StepFooter projectId={projectId} stepCode="STEP_9_DRAFTS" />
     </div>
